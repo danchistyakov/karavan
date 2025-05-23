@@ -1,5 +1,5 @@
 from cards import *
-from graphics import WINDOW_WIDTH, WINDOW_HEIGHT
+from constants import WINDOW_WIDTH, WINDOW_HEIGHT
 import numpy as np
 import random
 

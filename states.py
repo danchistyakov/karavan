@@ -137,7 +137,11 @@ class StandardMode(State):
 
         # Проверка победы
         if (player := self.check_winning_condition()) is not None:
-            return Quit()
+            return WinState(
+                winner=player,
+                objects=self.objects,
+                animations=self.animations
+            )
 
         # Ход игрока 1: обработка карты из руки
         player_1_playing_deck: PlayingDeck = self.objects['player_1_playing_deck']
@@ -310,6 +314,13 @@ class StandardMode(State):
                 else:
                     self.animations.append(self.respace_player_hand_animation(player_2_playing_deck, player=2))
 
+        if (player := self.check_winning_condition()) is not None:
+            return WinState(
+                winner=player,
+                objects=self.objects,
+                animations=self.animations
+            )
+
         return self
 
     def translate_card_animation(self, card, cx, cy, angle, at_deck='anonymous_card'):
@@ -449,18 +460,60 @@ class StandardMode(State):
             yield {'anonymous_button': self.objects['anonymous_button']}
 
     def check_winning_condition(self):
-        c1, c2, c3, o1, o2, o3 = [self.objects[name].calculate_value() for name in self.caravan_names]
-        if (
-                not (21 <= c1 <= 26 or 21 <= o1 <= 26)
-                or not (21 <= c2 <= 26 or 21 <= o2 <= 26)
-                or not (21 <= c3 <= 26 or 21 <= o3 <= 26)
-        ):
-            return None
-        if c1 == o1 or c2 == o2 or c3 == o3:
-            return None
-        p1_win_count = sum([1 if y > 26 or 26 >= x > y else 0 for x, y in [(c1, o1), (c2, o2), (c3, o3)]])
-        return 1 if p1_win_count >= 2 else 2
+        """Возвращает 1, 2 или None (игра продолжается) по официальным правилам Fallout: New Vegas."""
 
+        p1_caravans = [self.objects[name] for name in self.caravan_names[:3]]
+        p2_caravans = [self.objects[name] for name in self.caravan_names[3:]]
+
+        p1_values = [c.calculate_value() for c in p1_caravans]
+        p2_values = [c.calculate_value() for c in p2_caravans]
+
+        p1_wins = 0
+        p2_wins = 0
+        draws = 0
+
+        for v1, v2 in zip(p1_values, p2_values):
+            in_range1 = 21 <= v1 <= 26
+            in_range2 = 21 <= v2 <= 26
+
+            if in_range1 and not in_range2:
+                p1_wins += 1
+            elif in_range2 and not in_range1:
+                p2_wins += 1
+            elif in_range1 and in_range2:
+                if v1 > v2:
+                    p1_wins += 1
+                elif v2 > v1:
+                    p2_wins += 1
+                else:
+                    draws += 1  # ничья
+
+        if p1_wins >= 2:
+            return 1
+        if p2_wins >= 2:
+            return 2
+
+        # если у обоих игроков по два проданных каравана
+        if p1_wins + draws >= 2 and p2_wins + draws >= 2:
+            # ничья по проданным караванам — продолжаем игру
+            return None
+
+        return None
+
+    def _compare(self, p1, p2):
+        # Ничья по какому-либо каравану — продолжаем
+        if any(a == b for a, b in zip(p1, p2)):
+            return None
+
+        # Подсчёт побед по каждому из трёх караванов
+        p1_wins = 0
+        for a, b in zip(p1, p2):
+            if b > 26:
+                p1_wins += 1
+            elif (21 <= a <= 26) and ((26 - a) < (26 - b)):
+                p1_wins += 1
+
+        return 1 if p1_wins >= 2 else 2
 
 class Quit(State):
     def __init__(self, objects=None, animations=None, transition=False):
@@ -585,3 +638,39 @@ class Trash(Button):
             self.is_selected = False
             self.font_color = self.default_font_color
             self.image = self.original_image
+class WinState(State):
+    def __init__(self, winner, **kwargs):
+        super().__init__(**kwargs)
+        self.winner = winner
+        self.objects['exit_button'] = Button(
+            left=WINDOW_WIDTH // 2 - 64, top=WINDOW_HEIGHT // 2 + 50,
+            width=128, height=64, text='Выход'
+        )
+        self.banner = pygame.image.load(
+            'assets/images/win_banner.jpg' if winner == 1
+            else 'assets/images/lose_banner.png'
+        ).convert_alpha()
+        # масштабируем по ширине окна (не обязательно)
+        bw, bh = self.banner.get_size()
+        if bw > WINDOW_WIDTH * 0.8:
+            ratio = (WINDOW_WIDTH * 0.8) / bw
+            self.banner = pygame.transform.smoothscale(
+                self.banner, (int(bw * ratio), int(bh * ratio))
+            )
+
+    def handle_events(self):
+        x, y = pygame.mouse.get_pos()
+        for obj in self.objects.values():
+            obj.hover(x, y)
+
+        for event in pygame.event.get(MOUSEBUTTONUP):
+            x, y = event.pos
+            for obj in self.objects.values():
+                obj.click(x, y)
+                if obj.check_if_selected():
+                    return Quit()
+
+        return self
+
+    def is_running(self):
+        return True

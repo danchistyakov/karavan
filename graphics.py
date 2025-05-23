@@ -1,12 +1,14 @@
 import pygame
 
+from states import WinState
+
 # Display surface
 display_surf = None
 
 # Window constants
 WINDOW_WIDTH, WINDOW_HEIGHT = 1000, 600
 WINDOW_FLAGS = pygame.RESIZABLE | pygame.DOUBLEBUF | 0
-
+from constants import WINDOW_WIDTH, WINDOW_HEIGHT, FPS
 # Colors
 BG_COLOR = (255, 150, 0)
 TEXT_COLOR = (0, 0, 0)
@@ -87,6 +89,22 @@ def display(state):
         rect = text_surf.get_rect()
         rect.center = image_rect.center
         display_surf.blit(text_surf, rect)
+
+    if isinstance(state, WinState):
+        font = pygame.font.Font('assets/font.ttf', size=42)
+        text = 'Вы выиграли!' if state.winner == 1 else 'Вы проиграли.'
+        surf = font.render(text, True, TEXT_COLOR).convert_alpha()
+        rect = surf.get_rect()
+        rect.center = (WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 50)
+        display_surf.blit(surf, rect)
+        # затемняем фон
+        overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+        overlay.set_alpha(160)
+        overlay.fill((0, 0, 0))
+        display_surf.blit(overlay, (0, 0))
+        # баннер
+        rect = state.banner.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2))
+        display_surf.blit(state.banner, rect)
 
     pygame.display.update()
     clock.tick(FPS)
