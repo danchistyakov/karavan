@@ -7,8 +7,12 @@ import random
 from itertools import chain
 
 class Context:
-    def __init__(self):
-        self.state: State = StandardMode()
+    def __init__(self, initial_state=None):
+        if initial_state:
+            self.state = initial_state
+        else:
+            from deck_builder import MainMenuState
+            self.state = MainMenuState()
 
     def handle_events(self):
         self.state = self.state.handle_events()
@@ -31,11 +35,11 @@ class State:
 
 
 class StandardMode(State):
-    def __init__(self, objects=None, animations=None, transition=False):
+    def __init__(self, starting_cards=None, objects=None, animations=None, transition=False):
         super().__init__(objects, animations, transition)
 
+        self.starting_cards = starting_cards
         self.objects['anonymous_button'] = Button(0, 0, 0, 0, is_visible=False)
-
         # Инициализация караванов
         self.objects['player_1_caravan_A'] = Caravan(player=1, caravan='A')
         self.objects['player_1_caravan_B'] = Caravan(player=1, caravan='B')
