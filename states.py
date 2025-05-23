@@ -417,30 +417,49 @@ class StandardMode(State):
                 self.animations.append(self.translate_card_animation(adj, starting_x[player] + offset_x[caravan] + 20 * (j + 1), starting_y[player] + 40 * i, adj.angle, at_deck=f'{str(deck)}_anonymous_card__{i}_{j}'))
         yield {'anonymous_button': self.objects['anonymous_button']}
 
-    def activate_joker_card_animation(self, card, on_top_of_card, decks: list[Caravan]):
-        remove_card_template = None
-        for deck in decks:
-            if deck.contains(on_top_of_card):
-                for layer_card, adjacents in deck.layers:
-                    if layer_card == on_top_of_card or on_top_of_card in adjacents:
-                        remove_card_template = layer_card
-                        break
+    def activate_joker_card_animation(self, joker, on_top_of_card, decks: list[Caravan]):
+        """
+        joker – сам джокер-Card
+        on_top_of_card – карта, на которую его положили
+        decks – все 6 караванов
+        """
 
-        cards = []
+        # 1. понимаем, какие карты нужно убрать
+        if on_top_of_card.rank == RANK_A:  # режим «по масти»
+            def must_remove(card):
+                return (card.is_numerical()  # только 2-10
+                        and card.rank != RANK_A
+                        and card.suit == on_top_of_card.suit)
+        else:  # режим «по значению»
+            target_rank = on_top_of_card.rank
+
+            def must_remove(card):
+                return (card.is_numerical()
+                        and card.rank == target_rank
+                        and card is not on_top_of_card)  # свой «хозяин» не трогаем
+
+        # 2. собираем жертвы (числовая + все прикреплённые к ней картинки)
+        victims: list[Card] = []
         for deck in decks:
+            # делаем копию итерации, т.к. будем модифицировать layers
             for layer_card, adjacents in deck.layers[:]:
-                if (
-                    remove_card_template.rank == RANK_A and layer_card.suit == remove_card_template.suit
-                    or remove_card_template.rank != RANK_A and layer_card.rank == remove_card_template.rank
-                ):
-                    if layer_card == remove_card_template:
-                        continue
-                    deck.remove_card(layer_card)
-                    cards.append(layer_card)
-                    cards.extend(adjacents)
-        for i, c in enumerate(cards):
-            self.animations.append(self.translate_card_animation(c, -200, random.randint(0, WINDOW_HEIGHT), -500, at_deck=f'anonymous_card_{i}'))
-        yield {f'anonymous_button': self.objects['anonymous_button'], **{f'anonymous_card_{i}': c for i, c in enumerate(cards)}}
+                if must_remove(layer_card):
+                    deck.remove_card(layer_card)  # правит value/suit/direction
+                    victims.append(layer_card)
+                    victims.extend(adjacents)
+
+        # 3. красиво улетаем за экран
+        for i, c in enumerate(victims):
+            self.animations.append(
+                self.translate_card_animation(
+                    c, -200, random.randint(0, WINDOW_HEIGHT), -500,
+                    at_deck=f'anonymous_card_{i}'
+                )
+            )
+
+        # 4. отдаём генератору фиктивный кадр, чтобы анимации попали в очередь
+        yield {'anonymous_button': self.objects['anonymous_button'],
+               **{f'anonymous_card_{i}': c for i, c in enumerate(victims)}}
 
     def readjust_caravans_animation(self, decks):
         for deck in decks:
