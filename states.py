@@ -666,7 +666,7 @@ class WinState(State):
             width=128, height=64, text='Выход'
         )
         self.banner = pygame.image.load(
-            'assets/images/win_banner.jpg' if winner == 1
+            'assets/images/win_banner.png' if winner == 1
             else 'assets/images/lose_banner.png'
         ).convert_alpha()
         # масштабируем по ширине окна (не обязательно)
